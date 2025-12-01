@@ -87,16 +87,43 @@ STRONG_POSITIVE = 0.40
 STRONG_NEGATIVE = -0.40
 
 _POSITIVE_WORDS = {
-    "good", "great", "excellent", "awesome", "love", "liked", "like",
-    "pleasant", "happy", "satisfied", "enjoy", "best", "positive",
-    "amazing", "fantastic", "helpful", "help", "useful", "easy",
-    "recommend", "recommended", "works", "working"
+    "good", "great", "excellent", "awesome", "amazing", "fantastic",
+    "love", "loved", "lovely", "like", "liked", "likes",
+    "pleasant", "happy", "joy", "joyful", "satisfied", "satisfying",
+    "enjoy", "enjoyed", "enjoyable", "best", "positive", "perfect",
+    "helpful", "help", "helped", "useful", "easy", "easier", "easiest",
+    "recommend", "recommended", "recommendation",
+    "works", "working", "worked", "smooth", "smoothly",
+    "brilliant", "wonderful", "excellent", "exceptional",
+    "beneficial", "productive", "effective", "efficient",
+    "friendly", "responsive", "quick", "fast",
+    "improved", "improving", "reliable", "trustworthy",
+    "affordable", "valuable", "value",
+    "great job", "well done", "thank you",
+    "appreciate", "appreciated", "appreciation"
 }
+
 _NEGATIVE_WORDS = {
-    "bad", "terrible", "awful", "hate", "dislike", "worse", "worst",
-    "poor", "unsatisfied", "angry", "frustrate", "problem", "issue",
-    "not", "no", "never", "difficult", "disappoint", "complain",
-    "didn't", "didnt", "not_good", "not_helpful"
+    "bad", "terrible", "awful", "horrible", "poor",
+    "hate", "hated", "dislike", "disliked",
+    "worse", "worst", "unpleasant",
+    "unsatisfied", "dissatisfied", "unhappy",
+    "angry", "mad", "frustrated", "frustrating", "frustration",
+    "problem", "problems", "issue", "issues", "bug", "bugs",
+    "not", "never", "no", "none", "nothing",
+    "difficult", "hard", "complicated", "confusing",
+    "disappoint", "disappointed", "disappointing",
+    "complain", "complained", "complaint", "complaints",
+    "didn't", "didnt", "don't", "dont", "can't", "cant", "won't", "wont",
+    "not good", "not helpful", "not working",
+    "slow", "slower", "slowest",
+    "expensive", "costly",
+    "unhelpful", "useless", "ineffective",
+    "unreliable", "broken", "fail", "failed", "failing",
+    "crash", "crashed", "crashing",
+    "refund", "return", "returned", "wrong", "incorrect",
+    "missing", "incomplete", "invalid", "denied",
+    "lag", "laggy", "freeze", "freezing"
 }
 
 # ---------- WRITE ENV VARIABLE WITHOUT QUOTES ----------
