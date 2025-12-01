@@ -199,10 +199,14 @@ def download_file(file_token: str, response_id: str):
 
 
 def main():
-    with open(INPUT_CSV, newline="", encoding="utf-8") as f:
+    # --- The fix is here: using 'utf-8-sig' instead of 'utf-8' ---
+    with open(INPUT_CSV, newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
 
+        # print(reader.fieldnames) # Will now correctly print ['responseId', 'fileTokens']
+
         for row in reader:
+            # The column names "responseId" and "fileTokens" are now correctly retrieved
             response_id = (row.get(RESPID_COL) or "").strip()
             if not response_id.startswith("R_"):
                 continue
