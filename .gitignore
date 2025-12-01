@@ -1,0 +1,5 @@
+my_environment.env
+Clustered_output/*
+qualtrics_downloaded_files/*
+*.log
+uv.lock
