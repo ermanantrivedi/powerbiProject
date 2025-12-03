@@ -3,8 +3,8 @@
 Final script — cleaned path handling (no hardcoded project paths).
 
 Behavior:
-- ENV_PATH is derived dynamically from the script location.
-- PROJECT_ROOT = folder that contains this script (env file).
+- ENV_PATH is set to the environment file constant required by the user.
+- PROJECT_ROOT = folder that contains this script (env file) if possible.
 - DOC_FOLDER = PROJECT_ROOT/qualtrics_downloaded_files/downloads
 - OUTPUT_DIR  = PROJECT_ROOT/Clustered_output
 - OUTPUT_CSV  = OUTPUT_DIR/final_analysis_text_personality_<timestamp>.csv
@@ -17,8 +17,14 @@ import math
 import numpy as np
 import pandas as pd
 from collections import Counter
+from pathlib import Path
 
+# Document libraries
 from docx import Document
+from odf.opendocument import load
+from odf import teletype
+
+# NLP / embedding / clustering libs
 from keybert import KeyBERT
 import yake
 from sentence_transformers import SentenceTransformer
@@ -29,28 +35,31 @@ from sklearn.metrics import silhouette_score
 import nltk
 from nltk.sentiment import SentimentIntensityAnalyzer
 
-from pathlib import Path
 from dotenv import load_dotenv
 
 # ensure vader lexicon present
 nltk.download('vader_lexicon')
 
 # ----------------------------
-# Dynamic project / env paths
+# ENV PATH constant (user request)
 # ----------------------------
+# Per user preference, provide the environment file path constant at the top:
 ENV_PATH = Path(__file__).resolve().parent / "my_environment.env"
+if ENV_PATH.exists():
+    load_dotenv(ENV_PATH)
 env_path = Path(ENV_PATH)
 
+# If for some reason the env file doesn't exist, create it (keeps prior dynamic behavior safe)
 if not env_path.exists():
     env_path.parent.mkdir(parents=True, exist_ok=True)
     env_path.write_text("", encoding="utf-8")
 
 load_dotenv(env_path)
 
-# Project root (folder containing the script & the my_environment.env)
+# Project root (folder containing the env file)
 PROJECT_ROOT = env_path.parent
 
-# Input docx folder (relative to project root)
+# Input docs folder (relative to project root)
 DOC_FOLDER = PROJECT_ROOT / "qualtrics_downloaded_files" / "downloads"
 
 # Output folder (relative to project root)
@@ -146,12 +155,40 @@ def extract_record_id(filename):
     return m.group(1) if m else None
 
 def extract_text(path):
+    """
+    Support .docx, .txt, .odt
+    Returns extracted text or "" on failure.
+    """
     try:
-        doc = Document(path)
-        texts = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
-        return "\n".join(texts)
-    except:
+        suffix = path.suffix.lower()
+    except Exception:
         return ""
+
+    # DOCX
+    if suffix == ".docx":
+        try:
+            doc = Document(path)
+            texts = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
+            return "\n".join(texts)
+        except Exception:
+            return ""
+
+    # TXT
+    if suffix == ".txt":
+        try:
+            return path.read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            return ""
+
+    # ODT (odfpy required; imports are at top)
+    if suffix == ".odt":
+        try:
+            doc = load(str(path))
+            return teletype.extractText(doc)
+        except Exception:
+            return ""
+
+    return ""
 
 def extract_keywords(text):
     if not text or len(text.split()) < 5:
@@ -214,13 +251,13 @@ def choose_k(X, max_k=10):
 # STAGE 1 — READ FILES
 # ----------------------------
 records = []
-print("\n📄 Reading DOCX files...")
+print("\n📄 Reading files (.docx, .odt, .txt)...")
 
 if not DOC_FOLDER.exists():
     print(f"Warning: DOC_FOLDER does not exist: {DOC_FOLDER}")
 else:
     for p in sorted(DOC_FOLDER.iterdir()):
-        if not p.is_file() or p.suffix.lower() != ".docx":
+        if not p.is_file() or p.suffix.lower() not in {".docx", ".odt", ".txt"}:
             continue
         fname = p.name
         text = extract_text(p)
