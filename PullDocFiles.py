@@ -11,6 +11,7 @@ Qualtrics uploaded-files downloader (incremental)
 - On re-run, if a file for that token already exists (index or filesystem), API call is skipped.
 - Handles 429 (Too Many Requests) with retries + backoff.
 - Reads CSV with utf-8-sig to avoid BOM issues in headers.
+- Used utf-8-sig to avoid errors
 """
 
 import csv
