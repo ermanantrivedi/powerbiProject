@@ -9,6 +9,7 @@ Qualtrics uploaded-files downloader (incremental)
 - Saves each file into OUTPUT_DIR
 - On re-run, if a file with the same final name already exists, it is skipped.
 - Handles 429 (Too Many Requests) with retries + backoff.
+- Used utf-8-sig to avoid errors
 """
 
 import csv
@@ -199,7 +200,8 @@ def download_file(file_token: str, response_id: str):
 
 
 def main():
-    with open(INPUT_CSV, newline="", encoding="utf-8") as f:
+    # Use 'utf-8-sig' so a leading BOM (e.g. '\ufeff') in the CSV header is removed automatically.
+    with open(INPUT_CSV, newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
 
         for row in reader:
