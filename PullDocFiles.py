@@ -199,7 +199,8 @@ def download_file(file_token: str, response_id: str):
 
 
 def main():
-    with open(INPUT_CSV, newline="", encoding="utf-8") as f:
+    # Use 'utf-8-sig' so a leading BOM (e.g. '\ufeff') in the CSV header is removed automatically.
+    with open(INPUT_CSV, newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
 
         for row in reader:
