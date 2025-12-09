@@ -9,6 +9,7 @@ Qualtrics uploaded-files downloader (incremental)
 - Saves each file into OUTPUT_DIR
 - On re-run, if a file with the same final name already exists, it is skipped.
 - Handles 429 (Too Many Requests) with retries + backoff.
+- Used utf-8-sig to avoid errors
 """
 
 import csv
