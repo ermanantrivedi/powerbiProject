@@ -27,7 +27,7 @@ ENV_PATH = Path(__file__).resolve().parent / "my_environment.env"
 # ==========================================================
 
 env_path = Path(ENV_PATH)
-
+print(env_path)
 if not env_path.exists():
     env_path.parent.mkdir(parents=True, exist_ok=True)
     env_path.write_text("", encoding="utf-8")
@@ -199,14 +199,10 @@ def download_file(file_token: str, response_id: str):
 
 
 def main():
-    # --- The fix is here: using 'utf-8-sig' instead of 'utf-8' ---
-    with open(INPUT_CSV, newline="", encoding="utf-8-sig") as f:
+    with open(INPUT_CSV, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
 
-        # print(reader.fieldnames) # Will now correctly print ['responseId', 'fileTokens']
-
         for row in reader:
-            # The column names "responseId" and "fileTokens" are now correctly retrieved
             response_id = (row.get(RESPID_COL) or "").strip()
             if not response_id.startswith("R_"):
                 continue
