@@ -6,9 +6,11 @@ Qualtrics uploaded-files downloader (incremental)
     fileTokens   = semicolon-separated F_... tokens (e.g. "F_aaa;F_bbb")
 - For each (responseId, F_...) pair, calls:
     GET /API/v3/surveys/{surveyId}/responses/{responseId}/uploaded-files/{fileId}
-- Saves each file into OUTPUT_DIR
-- On re-run, if a file with the same final name already exists, it is skipped.
+- Saves each file into OUTPUT_DIR as: F_token.<ext> (uses server extension or content-type fallback)
+- Pre-checks: builds an in-memory index from files present in OUTPUT_DIR at startup (Option 2).
+- On re-run, if a file for that token already exists (index or filesystem), API call is skipped.
 - Handles 429 (Too Many Requests) with retries + backoff.
+- Reads CSV with utf-8-sig to avoid BOM issues in headers.
 - Used utf-8-sig to avoid errors
 """
 
@@ -17,7 +19,7 @@ import os
 import re
 import time
 import mimetypes
-from urllib.parse import urlparse, unquote
+from urllib.parse import unquote
 import requests
 from pathlib import Path
 from dotenv import load_dotenv
@@ -63,24 +65,20 @@ session.headers.update({
     "Accept": "*/*, application/json"
 })
 
-os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-
+# --------------------
+# helpers
+# --------------------
 def clean_filename(name: str) -> str:
     """Remove bad characters for filesystem and limit length."""
-    # Also strip semicolons which caused issues in your path
     name = re.sub(r'[<>:"/\\|?*;\x00-\x1F]', "_", name)
-    # Collapse multiple underscores
     name = re.sub(r"_+", "_", name).strip("._ ")
-    # Limit to something safe-ish
     return name[:200] or "file"
 
 
 def parse_content_disposition(cd: str) -> str | None:
     """
     Parse Content-Disposition and return filename or filename* value, if present.
-    Handles headers like:
-      attachment; filename="foo.docx"; filename*=utf-8''foo.docx
     """
     if not cd:
         return None
@@ -91,9 +89,7 @@ def parse_content_disposition(cd: str) -> str | None:
 
     for p in parts[1:]:
         if p.lower().startswith("filename*="):
-            value = p.split("=", 1)[1].strip()
-            value = value.strip('"').strip("'")
-            # filename*=utf-8''encoded-name
+            value = p.split("=", 1)[1].strip().strip('"').strip("'")
             if "''" in value:
                 _, encoded_name = value.split("''", 1)
                 try:
@@ -102,8 +98,7 @@ def parse_content_disposition(cd: str) -> str | None:
                     pass
             filename_star = value
         elif p.lower().startswith("filename="):
-            value = p.split("=", 1)[1].strip()
-            value = value.strip('"').strip("'")
+            value = p.split("=", 1)[1].strip().strip('"').strip("'")
             filename = value
 
     return filename_star or filename
@@ -111,44 +106,99 @@ def parse_content_disposition(cd: str) -> str | None:
 
 def guess_filename(resp: requests.Response, file_token: str, response_id: str | None) -> str:
     """
-    Build a nice filename from headers / URL / token.
-    Prefix with responseId for traceability.
+    Build filename using ONLY the file token and extension provided by server (or guessed from content-type).
+    Example output: F_abc123.pdf
     """
     cd = resp.headers.get("content-disposition", "")
-    fn = parse_content_disposition(cd)
+    original = parse_content_disposition(cd)
 
-    if not fn:
-        # Fallback to URL path or token
-        path = urlparse(resp.url).path
-        fn = os.path.basename(path) or file_token
+    ext = ""
+    if original:
+        original = unquote(original)
+        _, ext = os.path.splitext(original)
 
-    fn = unquote(fn)
-
-    # Ensure extension if missing
-    content_type = resp.headers.get("content-type", "").split(";")[0].strip()
-    if "." not in fn:
+    # If server did NOT provide extension, fallback to content-type detection
+    if not ext:
+        content_type = resp.headers.get("content-type", "").split(";")[0].strip()
         ext = mimetypes.guess_extension(content_type) or ""
-        fn = fn + ext
 
-    if response_id:
-        fn = f"{response_id}_{fn}"
-
-    return clean_filename(fn)
+    final_name = f"{file_token}{ext}"
+    return clean_filename(final_name)
 
 
 def build_file_url(response_id: str, file_token: str) -> str:
     """
-    Use the uploaded-files endpoint from Qualtrics docs:
-
     GET /API/v3/surveys/{surveyId}/responses/{responseId}/uploaded-files/{fileId}
-    where fileId is the file token (F_...)
     """
     return f"{BASE_URL}/API/v3/surveys/{SURVEY_ID}/responses/{response_id}/uploaded-files/{file_token}"
 
 
-def download_file(file_token: str, response_id: str):
-    url = build_file_url(response_id, file_token)
+# --------------------
+# Index: Option 2 — build in-memory index from existing files at startup
+# --------------------
+_TOKEN_RE = re.compile(r'^(F_[A-Za-z0-9]+)')  # extracts leading token like F_abc123
 
+def load_index_from_folder() -> dict:
+    """
+    Scan OUTPUT_DIR for files starting with 'F_' and build a map:
+      { "F_token": "filename.ext", ... }
+    This is performed once at startup and kept in-memory for the run.
+    """
+    idx = {}
+    try:
+        for p in OUTPUT_DIR.iterdir():
+            if not p.is_file():
+                continue
+            name = p.name
+            m = _TOKEN_RE.match(name)
+            if m:
+                token = m.group(1)
+                # prefer the first seen filename for a token
+                if token not in idx:
+                    idx[token] = name
+    except Exception as e:
+        print(f"!! Warning: failed to scan OUTPUT_DIR for index: {e}")
+    return idx
+
+
+def existing_file_for_token(file_token: str, index: dict) -> Path | None:
+    """
+    1) Check in-memory index for exact filename.
+    2) Fallback to filesystem glob for any file starting with token.
+    Returns Path if found, else None.
+    """
+    # 1) index lookup
+    if file_token in index:
+        candidate = OUTPUT_DIR / index[file_token]
+        if candidate.exists():
+            return candidate
+        # if indexed filename missing (external deletion), fallthrough to glob
+
+    # 2) filesystem fallback: find any file that starts with token (handles unknown ext or different naming)
+    for p in OUTPUT_DIR.glob(f"{file_token}*"):
+        if p.is_file():
+            return p
+
+    return None
+
+
+# --------------------
+# download logic
+# --------------------
+def download_file(file_token: str, response_id: str, index: dict) -> str:
+    """
+    Attempts to download. Returns:
+      - "downloaded" if file was downloaded this run
+      - "skipped" if file already existed and we did not call API
+      - "error" on failure after retries
+    """
+    # pre-check: skip API if file already exists (index or filesystem)
+    existing = existing_file_for_token(file_token, index)
+    if existing:
+        print(f"⏭️  Skipping {file_token} — already present: {existing}")
+        return "skipped"
+
+    url = build_file_url(response_id, file_token)
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             print(f"Downloading {file_token} for response {response_id} (attempt {attempt}) ...")
@@ -167,13 +217,16 @@ def download_file(file_token: str, response_id: str):
 
             r.raise_for_status()
 
-            # Build final filename and check if it already exists
+            # Build final filename and write
             filename = guess_filename(r, file_token, response_id)
-            out_path = os.path.join(OUTPUT_DIR, filename)
+            out_path = OUTPUT_DIR / filename
 
-            if os.path.exists(out_path):
+            # race-safe double-check
+            if out_path.exists():
                 print(f"⏭️  Skipping {file_token} (already exists: {out_path})")
-                return
+                # update in-memory index for run
+                index[file_token] = filename
+                return "skipped"
 
             with open(out_path, "wb") as f:
                 for chunk in r.iter_content(1024):
@@ -181,11 +234,14 @@ def download_file(file_token: str, response_id: str):
                         f.write(chunk)
 
             print(f"✔ Saved {file_token} → {out_path}")
+
+            # update in-memory index for this run
+            index[file_token] = filename
+
             time.sleep(PER_FILE_DELAY)
-            return
+            return "downloaded"
 
         except requests.HTTPError as e:
-            # Non-429 HTTP error; usually not worth retrying many times
             print(f"!! HTTP error for {file_token} / {response_id}: {e}")
             break
 
@@ -193,23 +249,59 @@ def download_file(file_token: str, response_id: str):
             print(f"!! Error downloading {file_token} for {response_id}: {e}")
             if attempt == MAX_RETRIES:
                 print(f"!! Giving up on {file_token} after {MAX_RETRIES} attempts.")
+                return "error"
             else:
                 sleep_for = BASE_SLEEP * attempt
                 print(f"  Sleeping {sleep_for} seconds before retry...")
                 time.sleep(sleep_for)
 
+    return "error"
 
+
+# --------------------
+# CSV helpers
+# --------------------
+def find_best_column_match(headers, desired):
+    desired_l = desired.lower()
+    for h in headers:
+        if h.lower() == desired_l:
+            return h
+    for h in headers:
+        if desired_l in h.lower():
+            return h
+    return None
+
+
+# --------------------
+# main
+# --------------------
 def main():
+    if not INPUT_CSV:
+        print("ERROR: RESPONSE_CSV_PATH not set in env.")
+        return
+
+    # Build in-memory index once at startup (Option 2)
+    index = load_index_from_folder()
+    print(f"Index built from folder: {len(index)} tokens found")
+
+    download_count = 0
+    skip_count = 0
+
     # Use 'utf-8-sig' so a leading BOM (e.g. '\ufeff') in the CSV header is removed automatically.
     with open(INPUT_CSV, newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
 
+        # header matching (case-insensitive / substring)
+        headers = reader.fieldnames or []
+        resp_col = find_best_column_match(headers, RESPID_COL) or RESPID_COL
+        token_col = find_best_column_match(headers, FILETOK_COL) or FILETOK_COL
+
         for row in reader:
-            response_id = (row.get(RESPID_COL) or "").strip()
+            response_id = (row.get(resp_col) or "").strip()
             if not response_id.startswith("R_"):
                 continue
 
-            tokens_field = (row.get(FILETOK_COL) or "").strip()
+            tokens_field = (row.get(token_col) or "").strip()
             if not tokens_field:
                 continue
 
@@ -219,7 +311,16 @@ def main():
             for token in tokens:
                 if not token.startswith("F_"):
                     continue
-                download_file(token, response_id)
+                status = download_file(token, response_id, index)
+                if status == "downloaded":
+                    download_count += 1
+                elif status == "skipped":
+                    skip_count += 1
+                # errors are logged inline
+
+    print("\nSummary:")
+    print(f"Total files downloaded: {download_count}")
+    print(f"Total files skipped: {skip_count}")
 
 
 if __name__ == "__main__":

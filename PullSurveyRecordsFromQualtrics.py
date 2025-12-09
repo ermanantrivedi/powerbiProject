@@ -657,7 +657,7 @@ def compute_and_write_sentiment_columns(csv_path: Path) -> None:
         # Use 'utf-8-sig' for the final write to ensure Excel compatibility
         df.to_csv(tmp_path, index=False, encoding="utf-8-sig")
         tmp_path.replace(csv_path)
-        print(f"Updated sentiment columns in {csv_path}")
+        print(f"Updated sentiment columns")
     except Exception as ex:
         print("Failed writing updated CSV for sentiment:", ex)
         if tmp_path.exists():
