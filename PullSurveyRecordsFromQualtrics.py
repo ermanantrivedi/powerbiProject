@@ -110,7 +110,7 @@ _NEGATIVE_WORDS = {
     "unsatisfied", "dissatisfied", "unhappy",
     "angry", "mad", "frustrated", "frustrating", "frustration",
     "problem", "problems", "issue", "issues", "bug", "bugs",
-    "not", "never", "no", "none", "nothing",
+    "not", "never","don't think ",
     "difficult", "hard", "complicated", "confusing",
     "disappoint", "disappointed", "disappointing",
     "complain", "complained", "complaint", "complaints",
