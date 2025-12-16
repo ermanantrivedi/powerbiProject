@@ -60,7 +60,7 @@ load_dotenv(env_path)
 PROJECT_ROOT = env_path.parent
 
 # Input docs folder (relative to project root)
-DOC_FOLDER = PROJECT_ROOT / "qualtrics_downloaded_files" / "downloads"
+DOC_FOLDER = PROJECT_ROOT / "qualtrics_downloaded_files" / "downloads"/"SV_0p7HfPlkL4Qu4g6"
 
 # Output folder (relative to project root)
 OUTPUT_DIR = PROJECT_ROOT / "Clustered_output"
