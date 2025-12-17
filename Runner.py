@@ -126,24 +126,7 @@ def run_script(script_path: Path, timeout: int | None = None) -> int:
 
 
 # -----------------------------------------------------
-# Utility: pick latest CSV in a folder
-# -----------------------------------------------------
-def latest_csv_in_folder(folder: Path) -> Optional[Path]:
-    if not folder.exists() or not folder.is_dir():
-        logging.warning("Folder does not exist: %s", folder)
-        return None
-
-    csv_files = [p for p in folder.iterdir() if p.is_file() and p.suffix.lower() == ".csv"]
-    if not csv_files:
-        logging.warning("No CSV files found in: %s", folder)
-        return None
-
-    csv_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
-    return csv_files[0]
-
-
-# -----------------------------------------------------
-# Clear folder before writing new file
+# Clear folder before writing new files
 # -----------------------------------------------------
 def clear_folder(folder: Path) -> None:
     try:
@@ -157,51 +140,31 @@ def clear_folder(folder: Path) -> None:
 
 
 # -----------------------------------------------------
-# Copy file to destination
+# Copy ANY file (no filtering)
 # -----------------------------------------------------
-def copy_to_target(src: Path, target_dir: Path) -> Optional[Path]:
+def copy_all_files(src_folder: Path, target_folder: Path) -> None:
     try:
-        target_dir.mkdir(parents=True, exist_ok=True)
+        target_folder.mkdir(parents=True, exist_ok=True)
     except Exception:
-        logging.exception("Cannot create target dir: %s", target_dir)
-        return None
+        logging.exception("Cannot create target dir: %s", target_folder)
+        return
 
-    dest = target_dir / src.name
-    try:
-        shutil.copy2(str(src), str(dest))
-        logging.info("Copied: %s -> %s", src, dest)
-        return dest
-    except Exception:
-        logging.exception("Failed copying %s to %s", src, dest)
-        return None
+    if not src_folder.exists() or not src_folder.is_dir():
+        logging.warning("Source folder missing: %s", src_folder)
+        return
 
+    files = [p for p in src_folder.iterdir() if p.is_file()]
+    if not files:
+        logging.warning("No files found in: %s", src_folder)
+        return
 
-# -----------------------------------------------------
-# Resolve CSVs to copy
-# -----------------------------------------------------
-def resolve_sources() -> List[Path]:
-    if CSV_PATHS:
-        parts = [p.strip() for p in CSV_PATHS.split(",") if p.strip()]
-        resolved = []
-        for p in parts[:2]:
-            path = Path(p)
-            if not path.is_absolute():
-                path = (BASE_DIR / path).resolve()
-            resolved.append(path)
-        logging.info("Using explicit CSV_PATHS: %s", resolved)
-        return resolved
-
-    full_csv = latest_csv_in_folder(SRC_FULL_FOLDER)
-    clustered_csv = latest_csv_in_folder(SRC_CLUSTERED_FOLDER)
-
-    resolved = []
-    if full_csv:
-        resolved.append(full_csv)
-    if clustered_csv:
-        resolved.append(clustered_csv)
-
-    logging.info("Resolved source CSVs: %s", resolved)
-    return resolved
+    for file in files:
+        try:
+            dest = target_folder / file.name
+            shutil.copy2(str(file), str(dest))
+            logging.info("Copied: %s -> %s", file, dest)
+        except Exception:
+            logging.exception("Failed copying %s to %s", file, dest)
 
 
 # -----------------------------------------------------
@@ -218,25 +181,18 @@ def main():
             logging.error("Script failed (%s). Stopping.", rc)
             break
 
-    # Resolve newest CSVs and copy to OneDrive
+    # Copy ALL files from both source folders
     try:
-        sources = resolve_sources()
+        # Clear destination folders first
+        clear_folder(ONEDRIVE_FULL_DIR)
+        clear_folder(ONEDRIVE_KEYWORD_DIR)
 
-        if not sources:
-            logging.warning("No resolved CSVs, skipping copy.")
-        else:
-            if len(sources) == 1:
-                clear_folder(ONEDRIVE_FULL_DIR)
-                copy_to_target(sources[0], ONEDRIVE_FULL_DIR)
-            else:
-                clear_folder(ONEDRIVE_FULL_DIR)
-                clear_folder(ONEDRIVE_KEYWORD_DIR)
-
-                copy_to_target(sources[0], ONEDRIVE_FULL_DIR)
-                copy_to_target(sources[1], ONEDRIVE_KEYWORD_DIR)
+        # Copy ALL files (no filtering)
+        copy_all_files(SRC_FULL_FOLDER, ONEDRIVE_FULL_DIR)
+        copy_all_files(SRC_CLUSTERED_FOLDER, ONEDRIVE_KEYWORD_DIR)
 
     except Exception:
-        logging.exception("Error resolving/copying CSV files.")
+        logging.exception("Error copying files.")
 
     elapsed = (datetime.now(timezone.utc) - start).total_seconds()
     logging.info("=== Finished in %.1f seconds ===", elapsed)
