@@ -205,7 +205,7 @@ def save_small_csv(survey_id, rows):
         for rid, toks in rows:
             w.writerow([rid, ";".join(toks)])
 
-    print(f"Small CSV saved → {out_path}")
+    print(f"Small CSV saved successfully")
     return out_path
 
 
@@ -560,7 +560,7 @@ class QualtricsExporter:
                 for line in csv_file:
                     out.write(line)
 
-            print(f"Full CSV saved → {out_path}")
+            print(f"Full CSV saved successfully")
 
             # --------------------------------------------------
             # SMALL CSV for ALL surveys (Option A)
