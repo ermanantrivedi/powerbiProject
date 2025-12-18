@@ -18,6 +18,7 @@ import numpy as np
 import pandas as pd
 from collections import Counter
 from pathlib import Path
+import os
 
 # Document libraries
 from docx import Document
@@ -25,20 +26,10 @@ from odf.opendocument import load
 from odf import teletype
 
 # NLP / embedding / clustering libs
-from keybert import KeyBERT
-import yake
-from sentence_transformers import SentenceTransformer
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
 from sklearn.metrics import silhouette_score
-
-import nltk
-from nltk.sentiment import SentimentIntensityAnalyzer
-
 from dotenv import load_dotenv
-
-# ensure vader lexicon present
-nltk.download('vader_lexicon')
 
 # ----------------------------
 # ENV PATH constant (user request)
@@ -125,30 +116,9 @@ UPLOADED_FILE_PATH = Path("/mnt/data/Who_Am_I.csv")
 # ----------------------------
 # Config / Models / Helpers
 # ----------------------------
-kw_model = KeyBERT("all-MiniLM-L6-v2")
-yake_extractor = yake.KeywordExtractor(top=20, stopwords=None)
-embed_model = SentenceTransformer("all-MiniLM-L6-v2")
-sentiment = SentimentIntensityAnalyzer()
-
-USELESS_WORDS = {
-    "trait", "traits", "helps", "help", "thing", "things", "stuff",
-    "someone", "something", "way", "people", "person"
-}
-
-BAD_GENERIC = {
-    "overall", "however", "summary", "assessment", "reflection", "assignment",
-    "activity", "question", "response", "identity", "thing"
-}
-
-def is_valid_trait(w):
-    w_clean = w.lower().strip()
-    if w_clean in USELESS_WORDS:
-        return False
-    if len(w_clean) < 3:
-        return False
-    if not re.match(r"^[a-zA-Z]+$", w_clean):
-        return False
-    return True
+from models.nlp_models import ModelHub
+MODEL_NAME = os.getenv("MODEL_NAME").lower()
+model = ModelHub.load(MODEL_NAME)
 
 def extract_record_id(filename):
     m = re.match(r"(R_[A-Za-z0-9]+)", filename)
@@ -190,31 +160,8 @@ def extract_text(path):
 
     return ""
 
-def extract_keywords(text):
-    if not text or len(text.split()) < 5:
-        return []
 
-    try:
-        kb = [x[0] for x in kw_model.extract_keywords(text, top_n=10)]
-    except:
-        kb = []
 
-    try:
-        yk = [x[0] for x in yake_extractor.extract_keywords(text)]
-    except:
-        yk = []
-
-    combined = list(set(kb + yk))
-    cleaned = []
-    for w in combined:
-        w_clean = w.lower().strip()
-        if len(w_clean) < 3:
-            continue
-        if w_clean in BAD_GENERIC:
-            continue
-        cleaned.append(w.strip())
-
-    return cleaned
 
 def assess_content_quality(text, keywords):
     if not text or not text.strip():
@@ -261,7 +208,7 @@ else:
             continue
         fname = p.name
         text = extract_text(p)
-        keywords = extract_keywords(text)
+        keywords = model.extract_keywords(text)
         cq, cqr = assess_content_quality(text, keywords)
         records.append({
             "FileName": fname,
@@ -281,8 +228,9 @@ print("✔ Files processed.")
 all_keywords = sorted({k for sub in df["Keywords"] for k in sub}) if not df.empty else []
 
 if len(all_keywords) > 5:
-    kw_vecs = embed_model.encode(all_keywords)
-    pca = PCA(n_components=min(50, kw_vecs.shape[1]))
+    kw_vecs = model.embed(all_keywords)
+    max_components = min(50, kw_vecs.shape[0], kw_vecs.shape[1])
+    pca = PCA(n_components=max_components, random_state=42)
     red = pca.fit_transform(kw_vecs)
 
     k_concepts = choose_k(red, max_k=10)
@@ -372,30 +320,16 @@ else:
 # ----------------------------
 print("🧠 Applying AI classification for Good/Bad traits...")
 
-positive_vec = embed_model.encode(
-    ["strength", "discipline", "creativity", "kindness", "leadership"]
-).mean(axis=0)
-negative_vec = embed_model.encode(
-    ["weakness", "struggle", "problem", "procrastination", "fear"]
-).mean(axis=0)
-
 GOODQ, BADQ, GSC, BSC = [], [], [], []
 
 for _, row in df.iterrows():
     kws = row["Keywords"]
-    good, bad = [], []
-    for kw in kws:
-        wclean = kw.lower().strip()
-        if not is_valid_trait(wclean):
-            continue
-        sent = sentiment.polarity_scores(kw)["compound"]
-        emb = embed_model.encode([kw])[0]
-        sim_pos = np.dot(emb, positive_vec)
-        sim_neg = np.dot(emb, negative_vec)
-        if sent > 0.25 or sim_pos > sim_neg:
-            good.append(kw)
-        else:
-            bad.append(kw)
+
+    traits = model.classify_traits(row["Text"], kws)
+
+    good = traits.get("GoodTraits", [])
+    bad = traits.get("BadTraits", [])
+
     GOODQ.append(", ".join(sorted(set(good))))
     BADQ.append(", ".join(sorted(set(bad))))
     GSC.append(len(set(good)))
@@ -427,7 +361,7 @@ def build_trait_categories(traits_list):
     words = sorted(list(set(words)))
     if len(words) == 0:
         return {}, {}, 1
-    emb = embed_model.encode(words)
+    emb = model.embed(words)
     k = choose_k(emb, max_k=min(10, len(words)))
     km = KMeans(n_clusters=k, random_state=42, n_init="auto")
     labels = km.fit_predict(emb)
