@@ -493,7 +493,6 @@ def compute_and_write_sentiment_columns(csv_path: Path) -> None:
 # ==========================================================
 
 class QualtricsExporter:
-    TARGET_SPECIAL = "Who Am I Today? Self Assessment - 1.1"
 
     def __init__(self):
         self.s = requests.Session()
@@ -569,12 +568,9 @@ class QualtricsExporter:
             rows = extract_ids_and_tokens(csv_file_small)
             save_small_csv(survey_id, rows)
 
-            # --------------------------------------------------
-            # Sentiment ONLY for special survey
-            # --------------------------------------------------
-            if survey_name.strip() == self.TARGET_SPECIAL:
-                print("Special survey detected → applying sentiment engine")
-                compute_and_write_sentiment_columns(out_path)
+           # Apply sentiment to ALL exported CSVs
+            print("Applying sentiment engine to CSV")
+            compute_and_write_sentiment_columns(out_path)
 
         return collected_ids
 # ==========================================================
