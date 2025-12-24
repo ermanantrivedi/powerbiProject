@@ -33,7 +33,10 @@ if not env_path.exists():
     env_path.write_text("", encoding="utf-8")
 
 load_dotenv(env_path)
-
+for k in list(os.environ.keys()):
+    clean_k = k.lstrip("\ufeff").strip()
+    if clean_k != k:
+        os.environ[clean_k] = os.environ[k]
 API_TOKEN = os.getenv("API_TOKEN")
 DATACENTER = os.getenv("DATACENTER")
 
@@ -552,7 +555,7 @@ class QualtricsExporter:
             # --------------------------------------------------
             # FULL CSV
             # --------------------------------------------------
-            out_path = FULL_DATA_DIR / f"full_data_{survey_id}.csv"
+            out_path = FULL_DATA_DIR / f"full_data_Sentiment_{survey_id}.csv"
 
             csv_file = export_full_survey_csv(survey_id)
             with out_path.open("w", encoding="utf-8-sig", newline="") as out:
