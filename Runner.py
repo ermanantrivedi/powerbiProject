@@ -30,6 +30,7 @@ SCRIPTS = [
     BASE_DIR / "PullSurveyRecordsFromQualtrics.py",
     BASE_DIR / "PullDocFiles.py",
     BASE_DIR / "ExtractContentForClustering.py",
+    BASE_DIR / "SMART_ContentAnalysis_level1.py",
 ]
 
 # -----------------------------------------------------
