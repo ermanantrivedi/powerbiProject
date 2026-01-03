@@ -3,8 +3,10 @@ import re
 import os
 import numpy as np
 import pandas as pd
+import zipfile
 from pathlib import Path
 from dotenv import load_dotenv
+from models.nlp_models import ModelHub
 
 # Analysis & Clustering
 from sklearn.metrics.pairwise import cosine_similarity
@@ -13,6 +15,8 @@ from sklearn.metrics import silhouette_score
 
 # Document libraries
 from docx import Document
+from odf import teletype
+from odf.opendocument import load
 from odf import teletype
 from odf.opendocument import load
 
@@ -40,7 +44,6 @@ STOP_PHRASES = {
 # ----------------------------
 # 2. NLP MODELS
 # ----------------------------
-from models.nlp_models import ModelHub
 
 MODEL_NAME = os.getenv("MODEL_NAME", "all-MiniLM-L6-v2").lower()
 model = ModelHub.load(MODEL_NAME)
@@ -49,10 +52,6 @@ model = ModelHub.load(MODEL_NAME)
 # ----------------------------
 # 3. HELPERS & QUALITY ASSESSMENT
 # ----------------------------
-
-import zipfile
-from odf import teletype
-from odf.opendocument import load
 
 def extract_text(path):
     """Robust text extraction for .docx, .odt, .txt with safe fallbacks."""
