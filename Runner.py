@@ -31,6 +31,7 @@ SCRIPTS = [
     BASE_DIR / "PullDocFiles.py",
     BASE_DIR / "ExtractContentForClustering.py",
     BASE_DIR / "SMART_ContentAnalysis_level1.py",
+    BASE_DIR / "ReadFilesExistingSurveys.py"
 ]
 
 # -----------------------------------------------------
