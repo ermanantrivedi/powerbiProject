@@ -76,7 +76,7 @@ CSV_PATHS = os.getenv("CSV_PATHS", "").strip()
 # -----------------------------------------------------
 LOG_FILE = BASE_DIR / "nightly_runner.log"
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.ERROR,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
         logging.FileHandler(LOG_FILE, encoding="utf-8"),
