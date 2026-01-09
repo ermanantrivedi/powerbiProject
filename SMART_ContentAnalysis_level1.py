@@ -234,7 +234,7 @@ def run_analysis():
                 smart_data[f"{label}_Keywords"], smart_data[f"{label}_Score"] = "", 0
 
         records.append({
-            "FileName": p.name,
+            "FileName": p.stem,
             "Text": raw_text[:1000],  # Storing more text for potential clustering
             "ContentQuality": cq,
             "ContentQualityReason": cqr,

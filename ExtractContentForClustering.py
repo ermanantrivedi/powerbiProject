@@ -206,7 +206,7 @@ else:
     for p in sorted(DOC_FOLDER.iterdir()):
         if not p.is_file() or p.suffix.lower() not in {".docx", ".odt", ".txt"}:
             continue
-        fname = p.name
+        fname = p.stem
         text = extract_text(p)
         keywords = model.extract_keywords(text)
         cq, cqr = assess_content_quality(text, keywords)
