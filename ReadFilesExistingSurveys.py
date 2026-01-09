@@ -135,7 +135,7 @@ for survey_folder in sorted(BASE_DOC_FOLDER.iterdir()):
         cq = assess_content_quality(text, keywords)
 
         records.append({
-            "FileName": p.name,
+            "FileName": p.stem,
             "Text": text,
             "ContentQuality": cq
         })
